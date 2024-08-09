@@ -9,7 +9,7 @@ class AuthController {
     if (!authHeader || !authHeader.startsWith('Basic ')) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    
+
     const base64Credentials = authHeader.split(' ')[1];
     let credentials;
 
@@ -25,17 +25,17 @@ class AuthController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const hashedPassword = crypto.createHash('sha1').update(password).digest('hex');    
+    const hashedPassword = crypto.createHash('sha1').update(password).digest('hex');
     try {
       const user = await dbClient.db.collection('users').findOne({ email, password: hashedPassword });
 
       if (!user) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
-    
+
       const token = uuidv4();
       const tokenKey = `auth_${token}`;
-    
+
       await redisClient.set(tokenKey, user._id.toString(), 'EX', 86400);
 
       return res.status(200).json({ token });
