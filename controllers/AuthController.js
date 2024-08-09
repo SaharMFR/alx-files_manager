@@ -26,6 +26,7 @@ class AuthController {
     }
 
     const hashedPassword = crypto.createHash('sha1').update(password).digest('hex');
+
     try {
       const user = await dbClient.db.collection('users').findOne({ email, password: hashedPassword });
 
@@ -36,7 +37,8 @@ class AuthController {
       const token = uuidv4();
       const tokenKey = `auth_${token}`;
 
-      await redisClient.set(tokenKey, user._id.toString(), 'EX', 86400);
+      await redisClient.set(tokenKey, user._id.toString());
+      await redisClient.expire(tokenKey, 86400);
 
       return res.status(200).json({ token });
     } catch (error) {
