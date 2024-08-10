@@ -1,11 +1,11 @@
 import { ObjectId } from 'mongodb';
 import crypto from 'crypto';
+import Bull from 'bull';
 import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
-import Bull from 'bull';
 
 const userQueue = new Bull('userQueue', {
-  redis: { host: process.env.REDIS_HOST, port: process.env.REDIS_PORT }
+  redis: { host: process.env.REDIS_HOST, port: process.env.REDIS_PORT, }
 });
 
 class UsersController {
