@@ -1,0 +1,66 @@
+import chai from 'chai';
+import chaiHttp from 'chai-http';
+import { app } from '../server';
+
+chai.use(chaiHttp);
+const { expect } = chai;
+
+describe('GET /files/:id', () => {
+  let token;
+  let fileId;
+
+  before(async () => {
+    const user = {
+      email: 'testfileinfo@example.com',
+      password: 'password123',
+    };
+    
+    await chai.request(app)
+      .post('/users')
+      .send(user);
+
+    const res = await chai.request(app)
+      .get('/connect')
+      .set('Authorization', `Basic ${Buffer.from(`${user.email}:${user.password}`).toString('base64')}`);
+
+    token = res.body.token;
+
+    const file = {
+      name: 'testfileinfo.png',
+      type: 'image',
+      parentId: 0,
+      isPublic: true,
+      data: Buffer.from('testdata').toString('base64'),
+    };
+
+    const fileRes = await chai.request(app)
+      .post('/files')
+      .set('x-token', token)
+      .send(file);
+
+    fileId = fileRes.body.id;
+  });
+
+  it('should return the file details', (done) => {
+    chai.request(app)
+      .get(`/files/${fileId}`)
+      .set('x-token', token)
+      .end((err, res) => {
+        expect(res).to.have.status(200);
+        expect(res.body).to.be.an('object');
+        expect(res.body).to.have.property('name', 'testfileinfo.png');
+        done();
+      });
+  });
+
+  it('should return 404 if file does not exist', (done) => {
+    chai.request(app)
+      .get('/files/invalidfileid')
+      .set('x-token', token)
+      .end((err, res) => {
+        expect(res).to.have.status(404);
+        expect(res.body).to.have.property('error', 'Not found');
+        done();
+      });
+  });
+});

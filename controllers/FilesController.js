@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import mime from 'mime-types';
+import { Queue } from 'bull';
 import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
 
@@ -70,6 +71,10 @@ class FilesController {
     };
 
     const result = await dbClient.db.collection('files').insertOne(newFile);
+
+    if (type === 'image') {
+      await fileQueue.add({ userId, fileId: result.insertedId });
+    }
 
     return res.status(201).json({ id: result.insertedId, ...newFile });
   }
@@ -182,6 +187,7 @@ class FilesController {
 
   static async getFile(req, res) {
     const fileId = req.params.id;
+    const size = req.query.size;
     const file = await dbClient.db.collection('files').findOne({ _id: new ObjectId(fileId) });
 
     if (!file) {
@@ -206,6 +212,14 @@ class FilesController {
     }
 
     const filePath = path.join(FOLDER_PATH, `${file._id}`);
+
+    if (file.type === 'image' && size) {
+      if (['100', '250', '500'].includes(size)) {
+        filePath = path.join(FOLDER_PATH, `${file._id}_${size}`);
+      } else {
+        return res.status(400).json({ error: 'Invalid size parameter' });
+      }
+    }
 
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'Not found' });
