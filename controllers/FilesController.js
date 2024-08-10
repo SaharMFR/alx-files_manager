@@ -88,24 +88,34 @@ class FilesController {
   static async getShow(req, res) {
     const { headers, params } = req;
     const token = headers['x-token'];
+  
     if (!token) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
     const tokenKey = `auth_${token}`;
     const userId = await redisClient.get(tokenKey);
+
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
     const { id: fileId } = params;
-    const file = await dbClient.db.collection('files').findOne({ _id: new ObjectId(fileId), userId });
 
-    if (!file) {
-      return res.status(404).json({ error: 'Not found' });
+    try {
+      const file = await dbClient.db.collection('files').findOne({ _id: new ObjectId(fileId) });
+
+      if (!file) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+      if (file.userId.toString() !== userId) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      return res.status(200).json(file);
+    } catch (error) {
+      return res.status(500).json({ error: 'Internal server error' });
     }
-
-    return res.status(200).json(file);
   }
 
   static async getIndex(req, res) {
