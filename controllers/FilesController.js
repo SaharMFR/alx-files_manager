@@ -7,11 +7,16 @@ import { Queue } from 'bull';
 import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
 
+const fileQueue = new Queue('fileQueue', {
+  redis: { host: process.env.REDIS_HOST, port: process.env.REDIS_PORT },
+});
+
 const FOLDER_PATH = process.env.FOLDER_PATH || '/tmp/files_manager';
 
 class FilesController {
   static async postUpload(req, res) {
-    const token = req.headers['x-token'];
+    const { headers, body } = req;
+    const token = headers['x-token'];
     if (!token) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -24,7 +29,7 @@ class FilesController {
 
     const {
       name, type, parentId = 0, isPublic = false, data,
-    } = req.body;
+    } = body;
 
     if (!name) {
       return res.status(400).json({ error: 'Missing name' });
@@ -44,7 +49,8 @@ class FilesController {
         return res.status(400).json({ error: 'Parent not found' });
       }
 
-      if (parentFile.type !== 'folder') {
+      const { type: parentType } = parentFile;
+      if (parentType !== 'folder') {
         return res.status(400).json({ error: 'Parent is not a folder' });
       }
     }
@@ -80,7 +86,8 @@ class FilesController {
   }
 
   static async getShow(req, res) {
-    const token = req.headers['x-token'];
+    const { headers, params } = req;
+    const token = headers['x-token'];
     if (!token) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -91,7 +98,7 @@ class FilesController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const fileId = req.params.id;
+    const { id: fileId } = params;
     const file = await dbClient.db.collection('files').findOne({ _id: new ObjectId(fileId), userId });
 
     if (!file) {
@@ -102,7 +109,8 @@ class FilesController {
   }
 
   static async getIndex(req, res) {
-    const token = req.headers['x-token'];
+    const { headers, query } = req;
+    const token = headers['x-token'];
     if (!token) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -113,7 +121,7 @@ class FilesController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const { parentId = 0, page = 0 } = req.query;
+    const { parentId = 0, page = 0 } = query;
     const pageSize = 20;
     const skip = page * pageSize;
 
@@ -128,7 +136,8 @@ class FilesController {
   }
 
   static async putPublish(req, res) {
-    const token = req.headers['x-token'];
+    const { headers, params } = req;
+    const token = headers['x-token'];
     if (!token) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -139,7 +148,7 @@ class FilesController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const fileId = req.params.id;
+    const { id: fileId } = params;
     const file = await dbClient.db.collection('files').findOne({ _id: new ObjectId(fileId), userId });
 
     if (!file) {
@@ -157,7 +166,8 @@ class FilesController {
   }
 
   static async putUnpublish(req, res) {
-    const token = req.headers['x-token'];
+    const { headers, params } = req;
+    const token = headers['x-token'];
     if (!token) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -168,7 +178,7 @@ class FilesController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const fileId = req.params.id;
+    const { id: fileId } = params;
     const file = await dbClient.db.collection('files').findOne({ _id: new ObjectId(fileId), userId });
 
     if (!file) {
@@ -186,8 +196,10 @@ class FilesController {
   }
 
   static async getFile(req, res) {
-    const fileId = req.params.id;
-    const size = req.query.size;
+    const { params, query, headers } = req;
+    const { id: fileId } = params;
+    const { size } = query;
+
     const file = await dbClient.db.collection('files').findOne({ _id: new ObjectId(fileId) });
 
     if (!file) {
@@ -195,7 +207,7 @@ class FilesController {
     }
 
     if (file.isPublic === false) {
-      const token = req.headers['x-token'];
+      const token = headers['x-token'];
       if (!token) {
         return res.status(404).json({ error: 'Not found' });
       }
@@ -211,7 +223,7 @@ class FilesController {
       return res.status(400).json({ error: "A folder doesn't have content" });
     }
 
-    const filePath = path.join(FOLDER_PATH, `${file._id}`);
+    let filePath = path.join(FOLDER_PATH, `${file._id}`);
 
     if (file.type === 'image' && size) {
       if (['100', '250', '500'].includes(size)) {
