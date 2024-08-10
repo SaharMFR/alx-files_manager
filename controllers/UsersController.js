@@ -2,6 +2,11 @@ import { ObjectId } from 'mongodb';
 import crypto from 'crypto';
 import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
+import Bull from 'bull';
+
+const userQueue = new Bull('userQueue', {
+  redis: { host: process.env.REDIS_HOST, port: process.env.REDIS_PORT }
+});
 
 class UsersController {
   static async postNew(req, res) {
@@ -28,9 +33,15 @@ class UsersController {
       password: hashedPassword,
     };
 
-    const result = await usersCollection.insertOne(newUser);
+    try {
+      const result = await usersCollection.insertOne(newUser);
 
-    return res.status(201).json({ id: result.insertedId, email: newUser.email });
+      await userQueue.add({ userId: result.insertedId.toString() });
+
+      return res.status(201).json({ id: result.insertedId, email: newUser.email });
+    } catch (err) {
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
   }
 
   static async getMe(req, res) {

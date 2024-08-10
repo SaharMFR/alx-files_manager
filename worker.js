@@ -1,11 +1,17 @@
 import { Queue } from 'bull';
 import { dbClient } from './utils/db';
-import { ObjectID } from 'mongodb';
+import { ObjectId } from 'mongodb';
 import imageThumbnail from 'image-thumbnail';
 import fs from 'fs';
 import path from 'path';
 
-const fileQueue = new Queue('fileQueue');
+const fileQueue = new Queue('fileQueue', {
+  redis: { host: process.env.REDIS_HOST, port: process.env.REDIS_PORT }
+});
+
+const userQueue = new Queue('userQueue', {
+  redis: { host: process.env.REDIS_HOST, port: process.env.REDIS_PORT }
+});
 
 fileQueue.process(async (job, done) => {
   const { userId, fileId } = job.data;
@@ -18,18 +24,18 @@ fileQueue.process(async (job, done) => {
     throw new Error('Missing userId');
   }
 
-  const file = await dbClient.db.collection('files').findOne({
-    _id: new ObjectID(fileId),
-    userId: new ObjectID(userId),
-  });
-
-  if (!file) {
-    throw new Error('File not found');
-  }
-
-  const filePath = path.join('/tmp/files_manager', file.localPath);
-
   try {
+    const file = await dbClient.db.collection('files').findOne({
+      _id: new ObjectId(fileId),
+      userId: new ObjectId(userId),
+    });
+
+    if (!file) {
+      throw new Error('File not found');
+    }
+
+    const filePath = path.join('/tmp/files_manager', file.localPath);
+
     const options = { responseType: 'base64' };
 
     const thumbnail500 = await imageThumbnail(filePath, { width: 500, ...options });
@@ -44,4 +50,34 @@ fileQueue.process(async (job, done) => {
   } catch (err) {
     done(err);
   }
+});
+
+userQueue.process(async (job, done) => {
+  const { userId } = job.data;
+
+  if (!userId) {
+    return done(new Error('Missing userId'));
+  }
+
+  try {
+    const user = await dbClient.db.collection('users').findOne({ _id: new ObjectId(userId) });
+
+    if (!user) {
+      return done(new Error('User not found'));
+    }
+
+    console.log(`Welcome ${user.email}!`);
+
+    done();
+  } catch (err) {
+    done(err);
+  }
+});
+
+fileQueue.on('error', (error) => {
+  console.error('File queue error:', error);
+});
+
+userQueue.on('error', (error) => {
+  console.error('User queue error:', error);
 });
